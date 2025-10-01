@@ -131,17 +131,23 @@ export default function AuthPage() {
           setPassword("");
 
           setTimeout(() => {
+            sessionStorage.setItem(`pw_${data.user.id}`, password);
             window.location.href = "/";
           }, 1500);
         }
       } else {
         // Log in
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { data, error: signInError } =
+          await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
 
         if (signInError) throw signInError;
+
+        if (data.user) {
+          sessionStorage.setItem(`pw_${data.user.id}`, password);
+        }
 
         setSuccess("Log in successful! Redirecting...");
 

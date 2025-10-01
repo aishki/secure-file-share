@@ -2,13 +2,12 @@
 "use client";
 
 import type React from "react";
-
+import { useAuth } from "@/lib/auth-context";
 import { useState, useEffect } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
 import {
   encryptAESKeyWithRSA,
   importRSAPublicKeyFromPEM,
-  importRSAPrivateKeyFromPEM,
   decryptAESKeyWithRSA,
 } from "@/lib/crypto";
 import { X, Mail, Trash2, Eye, Download, Share2 } from "lucide-react";
@@ -36,6 +35,7 @@ export default function ShareModal({
     new Map()
   );
   const [loadingAccess, setLoadingAccess] = useState(true);
+  const { privateKeyDecrypted } = useAuth();
 
   useEffect(() => {
     loadAccessList();
@@ -152,20 +152,13 @@ export default function ShareModal({
         );
       }
 
-      console.log("[v0] Checking owner's encrypted private key");
+      console.log("[v0] Using decrypted private key from auth context");
 
-      const { data: ownerData, error: ownerError } = await supabase
-        .from("users")
-        .select("private_key_encrypted")
-        .eq("id", user.id)
-        .single();
-
-      if (ownerError)
+      if (!privateKeyDecrypted) {
         throw new Error(
-          "Could not retrieve owner private key: " + ownerError.message
+          "Owner's private key is not available. Please unlock your key or sign in again."
         );
-      if (!ownerData?.private_key_encrypted)
-        throw new Error("Owner's private key not found");
+      }
 
       if (!file.encrypted_aes_key) {
         throw new Error(
@@ -175,15 +168,9 @@ export default function ShareModal({
 
       console.log("[v0] Decrypting AES key with owner's private key");
 
-      // In production, this would be decrypted with a user password
-      const ownerPrivateKeyPEM = ownerData.private_key_encrypted;
-      const ownerPrivateKey = await importRSAPrivateKeyFromPEM(
-        ownerPrivateKeyPEM
-      );
-
       const aesKey = await decryptAESKeyWithRSA(
         file.encrypted_aes_key,
-        ownerPrivateKey
+        privateKeyDecrypted
       );
 
       console.log("[v0] Encrypting AES key for recipient");
