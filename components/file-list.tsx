@@ -59,6 +59,17 @@ export default function FileList({
 
       if (deleteError) throw deleteError;
 
+      const { error: auditError } = await supabase.from("audit_log").insert({
+        user_id: user.id,
+        action: "delete",
+        file_id: fileId,
+      });
+
+      if (auditError) {
+        console.error("[v0] Audit log error:", auditError);
+        // Don't fail the delete if audit log fails
+      }
+
       onRefresh();
     } catch (err: any) {
       alert("Delete failed: " + err.message);

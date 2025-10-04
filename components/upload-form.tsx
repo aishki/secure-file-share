@@ -83,18 +83,36 @@ export default function UploadForm({
       if (uploadError) throw uploadError;
 
       // Store metadata
-      const { error: metadataError } = await supabase.from("files").insert({
-        owner_id: user.id,
-        file_name: file.name,
-        file_size: file.size,
-        file_type: file.type,
-        storage_path: storagePath,
-        encrypted_aes_key: encryptedAESKey,
-        iv: btoa(String.fromCharCode.apply(null, Array.from(iv))),
-        checksum,
-      });
+      const { error: metadataError, data: fileData } = await supabase
+        .from("files")
+        .insert({
+          owner_id: user.id,
+          file_name: file.name,
+          file_size: file.size,
+          file_type: file.type,
+          storage_path: storagePath,
+          encrypted_aes_key: encryptedAESKey,
+          iv: btoa(String.fromCharCode.apply(null, Array.from(iv))),
+          checksum,
+        });
 
       if (metadataError) throw metadataError;
+
+      // Insert audit log
+      const { error: auditError } = await supabase.from("audit_log").insert({
+        user_id: user.id,
+        action: "upload",
+        file_id: fileData?.id || null, // We don't have the file ID yet, but we can fetch it
+        details: {
+          file_name: file.name,
+          file_size: file.size,
+        },
+      });
+
+      if (auditError) {
+        console.error("[v0] Audit log error:", auditError);
+        // Don't fail the upload if audit fails
+      }
 
       setSuccess(`File "${file.name}" uploaded successfully!`);
       setFile(null);
