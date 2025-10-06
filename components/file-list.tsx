@@ -36,9 +36,13 @@ export default function FileList({
         .from("files")
         .select("storage_path, owner_id")
         .eq("id", fileId)
-        .single();
+        .maybeSingle();
 
       if (fetchError) throw fetchError;
+
+      if (!fileData) {
+        throw new Error("File not found");
+      }
 
       if (fileData.owner_id !== user.id) {
         throw new Error("You can only delete files you own");
@@ -67,7 +71,6 @@ export default function FileList({
 
       if (auditError) {
         console.error("[v0] Audit log error:", auditError);
-        // Don't fail the delete if audit log fails
       }
 
       onRefresh();
@@ -79,16 +82,22 @@ export default function FileList({
   return (
     <>
       <div className="space-y-4">
-        {files.map((file) => (
-          <FileCard
-            key={file.id}
-            file={file}
-            onShare={() => handleShare(file)}
-            onDelete={isSharedView ? undefined : () => handleDelete(file.id)}
-            canShare={!isSharedView}
-            accessLevel={file.access_level}
-          />
-        ))}
+        {files.map((file) => {
+          const isOwner = file.owner_id === user.id;
+          const isCollaborator = file.access_level === "collaborator";
+          const canShare = !isSharedView || isOwner || isCollaborator;
+
+          return (
+            <FileCard
+              key={file.id}
+              file={file}
+              onShare={() => handleShare(file)}
+              onDelete={isOwner ? () => handleDelete(file.id) : undefined}
+              canShare={canShare}
+              accessLevel={file.access_level}
+            />
+          );
+        })}
       </div>
 
       {showShareModal && selectedFile && (

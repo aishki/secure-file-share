@@ -3,7 +3,9 @@
 
 import { useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
-import { Download, Share2, Trash2, Lock, AlertCircle } from "lucide-react";
+import { Download, Share2, Trash2, Lock, AlertCircle, Eye } from "lucide-react";
+import "@/lib/crypto";
+import { useAuth } from "@/lib/auth-context";
 
 export default function FileCard({
   file,
@@ -20,10 +22,12 @@ export default function FileCard({
 }) {
   const [downloading, setDownloading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { privateKeyDecrypted } = useAuth();
 
   const handleDownload = async () => {
     setDownloading(true);
     try {
+      const { decryptAESKeyWithRSA } = await import("@/lib/crypto");
       const supabase = getSupabaseClient();
 
       // Get encrypted file from storage
@@ -33,27 +37,45 @@ export default function FileCard({
 
       if (downloadError) throw downloadError;
 
-      // Get user's private key (in production, this would be decrypted with password)
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("private_key_encrypted")
-        .single();
+      if (!privateKeyDecrypted) {
+        throw new Error("Private key not available. Please sign in again.");
+      }
 
-      if (userError) throw userError;
+      // Get the encrypted AES key for this file
+      const encryptedAESKey = file.encrypted_aes_key;
+      if (!encryptedAESKey) {
+        throw new Error("File key not found");
+      }
 
-      // Temp message that decryption requires the private key
-      // In production, decrypt the private key with the user's password
-      alert(
-        "Download feature requires private key decryption setup. This is a security feature."
+      // Decrypt the AES key with user's private key
+      const aesKey = await decryptAESKeyWithRSA(
+        encryptedAESKey,
+        privateKeyDecrypted
       );
 
-      // Example:
-      // const privateKeyPEM = await decryptPrivateKey(userData.private_key_encrypted, userPassword);
-      // const rsaPrivateKey = await importRSAPrivateKeyFromPEM(privateKeyPEM);
-      // const aesKey = await decryptAESKeyWithRSA(file.encrypted_aes_key, rsaPrivateKey);
-      // const iv = new Uint8Array(atob(file.iv).split('').map(c => c.charCodeAt(0)));
-      // const decrypted = await decryptFile(await fileData.arrayBuffer(), aesKey, iv);
-      // Download the decrypted file
+      // Decrypt the file
+      const { decryptFile } = await import("@/lib/crypto");
+      const iv = new Uint8Array(
+        atob(file.iv)
+          .split("")
+          .map((c) => c.charCodeAt(0))
+      );
+      const decrypted = await decryptFile(
+        await fileData.arrayBuffer(),
+        aesKey,
+        iv
+      );
+
+      // Create download link
+      const blob = new Blob([decrypted]);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.file_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (err: any) {
       alert("Download failed: " + err.message);
     } finally {
@@ -93,7 +115,10 @@ export default function FileCard({
     }
   };
 
-  const canDownload =
+  const canViewFile =
+    !accessLevel ||
+    ["viewer", "downloader", "collaborator"].includes(accessLevel);
+  const canDownloadFile =
     !accessLevel || ["downloader", "collaborator"].includes(accessLevel);
   const canShareFile = !accessLevel || accessLevel === "collaborator";
 
@@ -120,7 +145,19 @@ export default function FileCard({
 
         {/* Actions */}
         <div className="flex items-center gap-2 ml-4 relative">
-          {canDownload && (
+          {canViewFile && (
+            <button
+              onClick={() => {
+                /* View file preview */
+              }}
+              className="p-2 hover:bg-border rounded-lg transition-colors"
+              title="View file"
+            >
+              <Eye className="w-4 h-4 text-muted-foreground" />
+            </button>
+          )}
+
+          {canDownloadFile && (
             <button
               onClick={handleDownload}
               disabled={downloading}
@@ -175,10 +212,10 @@ export default function FileCard({
             </div>
           )}
 
-          {!canDownload && accessLevel && (
+          {!canViewFile && accessLevel && (
             <div
               className="p-2 text-muted-foreground hover:text-foreground cursor-help"
-              title={`You have ${accessLevel} access - cannot download`}
+              title={`No access to this file`}
             >
               <AlertCircle className="w-4 h-4" />
             </div>
