@@ -1,16 +1,17 @@
-"use client"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
 
-import { useState } from "react"
-import { getSupabaseClient } from "@/lib/supabase"
-import { LogOut, User } from "lucide-react"
+import { useState } from "react";
+import { getSupabaseClient } from "@/lib/supabase";
+import { LogOut, User } from "lucide-react";
 
 export default function UserMenu({ user }: { user: any }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
 
   const handleLogout = async () => {
-    const supabase = getSupabaseClient()
-    await supabase.auth.signOut()
-  }
+    const supabase = getSupabaseClient();
+    await supabase.auth.signOut();
+  };
 
   return (
     <div className="relative">
@@ -19,7 +20,9 @@ export default function UserMenu({ user }: { user: any }) {
         className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg hover:border-primary transition-colors"
       >
         <User className="w-4 h-4 text-primary" />
-        <span className="text-sm text-foreground truncate max-w-[200px]">{user.email}</span>
+        <span className="text-sm text-foreground truncate max-w-[200px]">
+          {user.email}
+        </span>
       </button>
 
       {open && (
@@ -34,5 +37,5 @@ export default function UserMenu({ user }: { user: any }) {
         </div>
       )}
     </div>
-  )
+  );
 }

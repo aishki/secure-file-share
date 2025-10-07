@@ -66,11 +66,13 @@ export default function ShareModal({
       const people: any[] = [];
 
       // Add owner first
-      const { data: ownerData } = await supabase
+      const { data: ownerData, error: ownerError } = await supabase
         .from("users")
         .select("email")
         .eq("id", file.owner_id)
-        .single();
+        .maybeSingle();
+
+      if (ownerError && ownerError.code !== "PGRST116") throw ownerError;
 
       if (ownerData) {
         people.push({
