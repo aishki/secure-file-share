@@ -134,13 +134,13 @@ export default function ShareModal({
 
       console.log("[v0] Found recipient:", recipientData.id);
 
-      // Check if already shared - fix the query to include proper error handling
+      // Check if already shared
       const { data: existingAccess, error: existingError } = await supabase
         .from("file_access")
         .select("id, access_level")
         .eq("file_id", file.id)
         .eq("user_id", recipientData.id)
-        .maybeSingle(); // Use maybeSingle instead of single to handle no results gracefully
+        .maybeSingle();
 
       if (existingError && existingError.code !== "PGRST116") {
         throw new Error(
@@ -158,20 +158,21 @@ export default function ShareModal({
 
       if (!privateKeyDecrypted) {
         throw new Error(
-          "Owner's private key is not available. Please unlock your key or sign in again."
+          "Your private key is not available. Please unlock your key or sign in again."
         );
       }
 
-      if (!file.encrypted_aes_key) {
+      const encryptedAESKey = file.encrypted_aes_key;
+      if (!encryptedAESKey) {
         throw new Error(
-          "File AES key not found. Please try uploading the file again."
+          "File AES key not found. This file may not be properly encrypted."
         );
       }
 
-      console.log("[v0] Decrypting AES key with owner's private key");
+      console.log("[v0] Decrypting AES key with private key");
 
       const aesKey = await decryptAESKeyWithRSA(
-        file.encrypted_aes_key,
+        encryptedAESKey,
         privateKeyDecrypted
       );
 
@@ -212,7 +213,6 @@ export default function ShareModal({
 
       if (auditError) {
         console.error("[v0] Audit log error:", auditError);
-        // Don't fail if audit log fails
       }
 
       setSuccess(`File shared with ${recipientEmail} as ${accessLevel}`);
