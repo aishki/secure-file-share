@@ -32,7 +32,8 @@ export default function Dashboard({ user }: { user: any }) {
           .from("file_access")
           .select(
             `
-            file_id,
+            id,
+            encrypted_aes_key,
             access_level,
             files:file_id(
               id,
@@ -41,7 +42,6 @@ export default function Dashboard({ user }: { user: any }) {
               file_size,
               file_type,
               storage_path,
-              encrypted_aes_key,
               iv,
               checksum,
               created_at,
@@ -54,12 +54,12 @@ export default function Dashboard({ user }: { user: any }) {
 
         if (sharedError) throw sharedError;
 
-        // Flatten the shared files data
         const sharedFilesList =
           shared
             ?.map((access: any) => ({
               ...access.files,
               access_level: access.access_level,
+              encrypted_aes_key: access.encrypted_aes_key,
             }))
             .filter((f: any) => f && f.id) || [];
 
