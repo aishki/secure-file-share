@@ -433,6 +433,22 @@ export default function ShareModal({
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </>
+                    ) : person.role.toLowerCase() === "collaborator" &&
+                      user.id !== file.owner_id ? (
+                      <>
+                        <span className="text-xs px-2 py-1 bg-muted/50 text-muted-foreground rounded cursor-default">
+                          {person.role}
+                        </span>
+                        {!person.isOwner && (
+                          <button
+                            onClick={() => handleRemoveAccess(person.id)}
+                            className="p-1 hover:bg-red-500/10 rounded transition-colors text-muted-foreground hover:text-red-500"
+                            title="Remove access"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <span className="text-xs px-2 py-1 bg-muted/50 text-muted-foreground rounded cursor-default">
                         {person.role}
