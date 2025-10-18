@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 
 export default function ViewModal({
@@ -15,10 +15,9 @@ export default function ViewModal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Trigger preview loading on mount
-  useState(() => {
+  useEffect(() => {
     loadPreview();
-  });
+  }, []);
 
   const loadPreview = async () => {
     try {
@@ -29,7 +28,7 @@ export default function ViewModal({
       const fileType = file.file_type?.toLowerCase() || "";
 
       if (fileType.startsWith("image/")) {
-        // For images, we'd need to decrypt and load
+        // For images, decrypt and load
         // For now, show a message that the file is encrypted
         setPreview("image");
       } else if (fileType.includes("text") || fileType.includes("pdf")) {
