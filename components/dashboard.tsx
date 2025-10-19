@@ -120,7 +120,7 @@ export default function Dashboard({ user }: { user: any }) {
                 </div>
               ) : ownedFiles.length === 0 ? (
                 <div className="bg-card border border-border rounded-lg p-12 text-center">
-                  <Upload className="w-12 h-12 text-muted mx-auto mb-4 opacity-50" />
+                  <Upload className="w-12 h-12 text-muted mx-auto mb-4 opacity-80" />
                   <p className="text-muted-foreground">
                     No files yet. Upload your first file to get started.
                   </p>
