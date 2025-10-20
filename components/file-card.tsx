@@ -3,10 +3,9 @@
 
 import { useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
-import { Download, Share2, Trash2, Lock, AlertCircle, Eye } from "lucide-react";
+import { Download, Share2, Trash2, Lock, AlertCircle } from "lucide-react";
 import "@/lib/crypto";
 import { useAuth } from "@/lib/auth-context";
-import ViewModal from "./view-modal";
 
 export default function FileCard({
   file,
@@ -23,7 +22,6 @@ export default function FileCard({
 }) {
   const [downloading, setDownloading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
   const { privateKeyDecrypted } = useAuth();
 
   const handleDownload = async () => {
@@ -103,8 +101,6 @@ export default function FileCard({
 
   const getRoleDescription = (role?: string) => {
     switch (role?.toLowerCase()) {
-      case "viewer":
-        return "Viewer";
       case "downloader":
         return "Downloader";
       case "collaborator":
@@ -114,9 +110,6 @@ export default function FileCard({
     }
   };
 
-  const canViewFile =
-    !accessLevel ||
-    ["viewer", "downloader", "collaborator"].includes(accessLevel);
   const canDownloadFile =
     !accessLevel || ["downloader", "collaborator"].includes(accessLevel);
   const canShareFile = !accessLevel || accessLevel === "collaborator";
@@ -145,16 +138,6 @@ export default function FileCard({
 
           {/* Actions */}
           <div className="flex items-center gap-2 ml-4 relative">
-            {canViewFile && (
-              <button
-                onClick={() => setShowViewModal(true)}
-                className="p-2 hover:bg-border rounded-lg transition-colors"
-                title="View file"
-              >
-                <Eye className="w-4 h-4 text-muted-foreground" />
-              </button>
-            )}
-
             {canDownloadFile && (
               <button
                 onClick={handleDownload}
@@ -210,10 +193,10 @@ export default function FileCard({
               </div>
             )}
 
-            {!canViewFile && accessLevel && (
+            {!canDownloadFile && accessLevel && (
               <div
                 className="p-2 text-muted-foreground hover:text-foreground cursor-help"
-                title={`No access to this file`}
+                title={`No download access to this file`}
               >
                 <AlertCircle className="w-4 h-4" />
               </div>
@@ -221,10 +204,6 @@ export default function FileCard({
           </div>
         </div>
       </div>
-
-      {showViewModal && (
-        <ViewModal file={file} onClose={() => setShowViewModal(false)} />
-      )}
     </>
   );
 }

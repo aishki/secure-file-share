@@ -10,7 +10,7 @@ import {
   importRSAPublicKeyFromPEM,
   decryptAESKeyWithRSA,
 } from "@/lib/crypto";
-import { X, Mail, Trash2, Eye, Download, Share2 } from "lucide-react";
+import { X, Mail, Trash2, Download, Share2 } from "lucide-react";
 
 export default function ShareModal({
   file,
@@ -24,9 +24,9 @@ export default function ShareModal({
   onSuccess: () => void;
 }) {
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [accessLevel, setAccessLevel] = useState<
-    "viewer" | "downloader" | "collaborator"
-  >("viewer");
+  const [accessLevel, setAccessLevel] = useState<"downloader" | "collaborator">(
+    "downloader"
+  );
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -217,7 +217,7 @@ export default function ShareModal({
 
       setSuccess(`File shared with ${recipientEmail} as ${accessLevel}`);
       setRecipientEmail("");
-      setAccessLevel("viewer");
+      setAccessLevel("downloader");
       await loadAccessList();
 
       setTimeout(() => {
@@ -288,8 +288,6 @@ export default function ShareModal({
 
   const getRoleIcon = (role: string) => {
     switch (role.toLowerCase()) {
-      case "viewer":
-        return <Eye className="w-4 h-4" />;
       case "downloader":
         return <Download className="w-4 h-4" />;
       case "collaborator":
@@ -346,7 +344,6 @@ export default function ShareModal({
                 onChange={(e) => setAccessLevel(e.target.value as any)}
                 className="px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="viewer">Viewer</option>
                 <option value="downloader">Downloader</option>
                 <option value="collaborator">Collaborator</option>
               </select>
@@ -421,7 +418,6 @@ export default function ShareModal({
                           }
                           className="text-xs px-2 py-1 bg-input border border-border rounded text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                         >
-                          <option value="viewer">Viewer</option>
                           <option value="downloader">Downloader</option>
                           <option value="collaborator">Collaborator</option>
                         </select>
