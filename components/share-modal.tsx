@@ -116,6 +116,10 @@ export default function ShareModal({
     try {
       const supabase = getSupabaseClient();
 
+      if (recipientEmail.toLowerCase() === user.email.toLowerCase()) {
+        throw new Error("You can't add yourself! You're the owner.");
+      }
+
       console.log("[v0] Starting share process for file:", file.id);
 
       const { data: recipientData, error: recipientError } = await supabase

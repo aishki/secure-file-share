@@ -110,8 +110,9 @@ export default function FileCard({
     }
   };
 
-  const canDownloadFile =
-    !accessLevel || ["downloader", "collaborator"].includes(accessLevel);
+  const canDownloadFile = accessLevel
+    ? ["downloader", "collaborator"].includes(accessLevel.toLowerCase())
+    : true;
   const canShareFile = !accessLevel || accessLevel === "collaborator";
 
   return (
@@ -120,7 +121,7 @@ export default function FileCard({
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <Lock className="w-4 h-4 text-primary" />
+              <Lock className="w-4 h-4 text-gray-400" />
               <h4 className="font-medium text-foreground truncate">
                 {file.file_name}
               </h4>
@@ -145,7 +146,7 @@ export default function FileCard({
                 className="p-2 hover:bg-border rounded-lg transition-colors disabled:opacity-50"
                 title="Download"
               >
-                <Download className="w-4 h-4 text-muted-foreground" />
+                <Download className="w-4 h-4 text-gray-400" />
               </button>
             )}
 
@@ -155,7 +156,7 @@ export default function FileCard({
                 className="p-2 hover:bg-border rounded-lg transition-colors"
                 title="Share"
               >
-                <Share2 className="w-4 h-4 text-muted-foreground" />
+                <Share2 className="w-4 h-4 text-gray-400" />
               </button>
             )}
 
@@ -198,7 +199,7 @@ export default function FileCard({
                 className="p-2 text-muted-foreground hover:text-foreground cursor-help"
                 title={`No download access to this file`}
               >
-                <AlertCircle className="w-4 h-4" />
+                <AlertCircle className="w-4 h-4 text-gray-400" />
               </div>
             )}
           </div>
