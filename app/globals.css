@@ -157,5 +157,5 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-muted rounded-full hover: bg-muted-foreground;
+  @apply bg-muted rounded-full hover:bg-muted-foreground;
 }
