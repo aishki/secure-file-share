@@ -63,16 +63,11 @@ export default function AuthPage() {
         const keyPair = await generateRSAKeyPair();
         const publicKeyPEM = await exportRSAPublicKeyToPEM(keyPair.publicKey);
 
-        const redirectUrl =
-          process.env.NEXT_PUBLIC_SUPABASE_REDIRECT_URL ||
-          `${window.location.origin}/auth/callback`;
-
-        // Sign up
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            emailRedirectTo: redirectUrl,
+            emailRedirectTo: undefined,
           },
         });
 
@@ -96,17 +91,17 @@ export default function AuthPage() {
               throw updateError;
             }
 
-            setSuccess(
-              "Sign up successful! Please check your email to confirm your account."
-            );
+            setSuccess("Account created successfully! Redirecting...");
             setEmail("");
             setPassword("");
+
+            // Auto-redirect to dashboard after brief delay
+            setTimeout(() => {
+              window.location.href = "/dashboard";
+            }, 1500);
           } catch (err: any) {
             console.error("[v0] Error in post-signup:", err);
-            // Don't throw here - the user was created, just the public key update failed
-            setSuccess(
-              "Account created! Please check your email to confirm. You may need to refresh after confirming."
-            );
+            throw err;
           }
         }
       } else {
@@ -119,6 +114,10 @@ export default function AuthPage() {
         if (signInError) throw signInError;
 
         setSuccess("Sign in successful! Redirecting...");
+
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 1500);
       }
     } catch (err: any) {
       console.error("[v0] Auth error:", err);
