@@ -97,7 +97,7 @@ export default function AuthPage() {
 
             // Auto-redirect to dashboard after brief delay
             setTimeout(() => {
-              window.location.href = "/dashboard";
+              window.location.href = "/";
             }, 1500);
           } catch (err: any) {
             console.error("[v0] Error in post-signup:", err);
@@ -116,7 +116,7 @@ export default function AuthPage() {
         setSuccess("Sign in successful! Redirecting...");
 
         setTimeout(() => {
-          window.location.href = "/dashboard";
+          window.location.href = "/";
         }, 1500);
       }
     } catch (err: any) {
