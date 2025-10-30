@@ -1,68 +1,72 @@
-"use client"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { getSupabaseClient } from "@/lib/supabase"
-import { generateRSAKeyPair, exportRSAPublicKeyToPEM } from "@/lib/crypto"
-import { Lock, Mail, Key } from "lucide-react"
+import { useState } from "react";
+import { getSupabaseClient } from "@/lib/supabase";
+import { generateRSAKeyPair, exportRSAPublicKeyToPEM } from "@/lib/crypto";
+import { Lock, Mail, Key } from "lucide-react";
 
 export default function AuthPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [isSignUp, setIsSignUp] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setLoading(true)
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
     try {
-      const supabase = getSupabaseClient()
+      const supabase = getSupabaseClient();
 
       if (isSignUp) {
         // Generate RSA key pair for new user
-        const keyPair = await generateRSAKeyPair()
-        const publicKeyPEM = await exportRSAPublicKeyToPEM(keyPair.publicKey)
+        const keyPair = await generateRSAKeyPair();
+        const publicKeyPEM = await exportRSAPublicKeyToPEM(keyPair.publicKey);
 
         // Sign up
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || window.location.origin,
+            emailRedirectTo:
+              process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
+              window.location.origin,
           },
-        })
+        });
 
-        if (signUpError) throw signUpError
+        if (signUpError) throw signUpError;
 
-        // Store user with public key
         if (data.user) {
-          const { error: insertError } = await supabase.from("users").insert({
-            id: data.user.id,
-            email: data.user.email,
-            public_key: publicKeyPEM,
-          })
+          // Wait a moment for the trigger to create the user record
+          await new Promise((resolve) => setTimeout(resolve, 500));
 
-          if (insertError) throw insertError
+          const { error: updateError } = await supabase
+            .from("users")
+            .update({ public_key: publicKeyPEM })
+            .eq("id", data.user.id);
+
+          if (updateError) throw updateError;
         }
       } else {
         // Sign in
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
-        })
+        });
 
-        if (signInError) throw signInError
+        if (signInError) throw signInError;
       }
     } catch (err: any) {
-      setError(err.message || "Authentication failed")
+      setError(err.message || "Authentication failed");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -73,7 +77,9 @@ export default function AuthPage() {
             <Lock className="w-8 h-8 text-primary" />
             <h1 className="text-3xl font-bold text-foreground">SecureShare</h1>
           </div>
-          <p className="text-muted-foreground">End-to-end encrypted file sharing</p>
+          <p className="text-muted-foreground">
+            End-to-end encrypted file sharing
+          </p>
         </div>
 
         {/* Card */}
@@ -112,7 +118,11 @@ export default function AuthPage() {
             </div>
 
             {/* Error */}
-            {error && <div className="p-3 bg-error/10 border border-error rounded-lg text-error text-sm">{error}</div>}
+            {error && (
+              <div className="p-3 bg-error/10 border border-error rounded-lg text-error text-sm">
+                {error}
+              </div>
+            )}
 
             {/* Submit Button */}
             <button
@@ -128,7 +138,10 @@ export default function AuthPage() {
           <div className="mt-6 text-center">
             <p className="text-muted-foreground text-sm">
               {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
-              <button onClick={() => setIsSignUp(!isSignUp)} className="text-primary hover:underline font-medium">
+              <button
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="text-primary hover:underline font-medium"
+              >
                 {isSignUp ? "Sign In" : "Sign Up"}
               </button>
             </p>
@@ -152,5 +165,5 @@ export default function AuthPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
