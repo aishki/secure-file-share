@@ -1,44 +1,51 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
+import AuthPage from "@/components/auth-page";
+import Dashboard from "@/components/dashboard";
+import type { User, Session } from "@supabase/supabase-js";
 
-export default function AuthCallbackPage() {
-  const router = useRouter();
+export default function Home() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const handleCallback = async () => {
-      try {
-        const supabase = getSupabaseClient();
+    const supabase = getSupabaseClient();
 
-        // Get the session from the URL
-        const { data, error } = await supabase.auth.getSession();
-
-        if (error) throw error;
-
-        if (data.session) {
-          // User is authenticated, redirect to dashboard
-          router.push("/dashboard");
-        } else {
-          // No session, redirect to auth
-          router.push("/");
-        }
-      } catch (error) {
-        console.error("[v0] Auth callback error:", error);
-        router.push("/");
-      }
+    const checkAuth = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setLoading(false);
     };
 
-    handleCallback();
-  }, [router]);
+    checkAuth();
 
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Confirming your email...</p>
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event: string, session: Session | null) => {
+        setUser(session?.user ?? null);
+      }
+    );
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return user ? <Dashboard user={user} /> : <AuthPage />;
 }
