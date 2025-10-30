@@ -1,42 +1,47 @@
-"use client"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
 
-import { useState, useEffect } from "react"
-import { getSupabaseClient } from "@/lib/supabase"
-import UploadForm from "./upload-form"
-import FileList from "./file-list"
-import UserMenu from "./user-menu"
-import { Upload, FileText } from "lucide-react"
+import { useState, useEffect } from "react";
+import { getSupabaseClient } from "@/lib/supabase";
+import UploadForm from "./upload-form";
+import FileList from "./file-list";
+import UserMenu from "./user-menu";
+import { Upload, FileText } from "lucide-react";
 
 export default function Dashboard({ user }: { user: any }) {
-  const [files, setFiles] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [files, setFiles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     const loadFiles = async () => {
       try {
-        const supabase = getSupabaseClient()
+        const supabase = getSupabaseClient();
+        console.log("[v0] Loading files for user:", user.id);
+
         const { data, error } = await supabase
           .from("files")
           .select("*")
           .eq("owner_id", user.id)
-          .order("created_at", { ascending: false })
+          .order("created_at", { ascending: false });
 
-        if (error) throw error
-        setFiles(data || [])
+        console.log("[v0] Files query result:", { data, error });
+
+        if (error) throw error;
+        setFiles(data || []);
       } catch (err) {
-        console.error("Error loading files:", err)
+        console.error("Error loading files:", err);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    loadFiles()
-  }, [user.id, refreshTrigger])
+    loadFiles();
+  }, [user.id, refreshTrigger]);
 
   const handleUploadSuccess = () => {
-    setRefreshTrigger((prev) => prev + 1)
-  }
+    setRefreshTrigger((prev) => prev + 1);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -62,9 +67,12 @@ export default function Dashboard({ user }: { user: any }) {
           {/* Files Section */}
           <div className="lg:col-span-2">
             <div className="mb-6">
-              <h2 className="text-xl font-bold text-foreground mb-2">Your Files</h2>
+              <h2 className="text-xl font-bold text-foreground mb-2">
+                Your Files
+              </h2>
               <p className="text-muted-foreground text-sm">
-                {files.length} file{files.length !== 1 ? "s" : ""} encrypted and stored securely
+                {files.length} file{files.length !== 1 ? "s" : ""} encrypted and
+                stored securely
               </p>
             </div>
 
@@ -76,14 +84,20 @@ export default function Dashboard({ user }: { user: any }) {
             ) : files.length === 0 ? (
               <div className="bg-card border border-border rounded-lg p-12 text-center">
                 <Upload className="w-12 h-12 text-muted mx-auto mb-4 opacity-50" />
-                <p className="text-muted-foreground">No files yet. Upload your first file to get started.</p>
+                <p className="text-muted-foreground">
+                  No files yet. Upload your first file to get started.
+                </p>
               </div>
             ) : (
-              <FileList files={files} user={user} onRefresh={handleUploadSuccess} />
+              <FileList
+                files={files}
+                user={user}
+                onRefresh={handleUploadSuccess}
+              />
             )}
           </div>
         </div>
       </main>
     </div>
-  )
+  );
 }
