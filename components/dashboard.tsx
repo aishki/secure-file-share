@@ -6,10 +6,11 @@ import { getSupabaseClient } from "@/lib/supabase";
 import UploadForm from "./upload-form";
 import FileList from "./file-list";
 import UserMenu from "./user-menu";
-import { Upload, FileText } from "lucide-react";
+import { Upload, FileText, Share2 } from "lucide-react";
 
 export default function Dashboard({ user }: { user: any }) {
-  const [files, setFiles] = useState<any[]>([]);
+  const [ownedFiles, setOwnedFiles] = useState<any[]>([]);
+  const [sharedFiles, setSharedFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -17,18 +18,52 @@ export default function Dashboard({ user }: { user: any }) {
     const loadFiles = async () => {
       try {
         const supabase = getSupabaseClient();
-        console.log("[v0] Loading files for user:", user.id);
 
-        const { data, error } = await supabase
+        const { data: owned, error: ownedError } = await supabase
           .from("files")
           .select("*")
           .eq("owner_id", user.id)
           .order("created_at", { ascending: false });
 
-        console.log("[v0] Files query result:", { data, error });
+        if (ownedError) throw ownedError;
+        setOwnedFiles(owned || []);
 
-        if (error) throw error;
-        setFiles(data || []);
+        const { data: shared, error: sharedError } = await supabase
+          .from("file_access")
+          .select(
+            `
+            file_id,
+            access_level,
+            files:file_id(
+              id,
+              owner_id,
+              file_name,
+              file_size,
+              file_type,
+              storage_path,
+              encrypted_aes_key,
+              iv,
+              checksum,
+              created_at,
+              updated_at
+            )
+          `
+          )
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (sharedError) throw sharedError;
+
+        // Flatten the shared files data
+        const sharedFilesList =
+          shared
+            ?.map((access: any) => ({
+              ...access.files,
+              access_level: access.access_level,
+            }))
+            .filter((f: any) => f && f.id) || [];
+
+        setSharedFiles(sharedFilesList);
       } catch (err) {
         console.error("Error loading files:", err);
       } finally {
@@ -65,36 +100,75 @@ export default function Dashboard({ user }: { user: any }) {
           </div>
 
           {/* Files Section */}
-          <div className="lg:col-span-2">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-foreground mb-2">
-                Your Files
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                {files.length} file{files.length !== 1 ? "s" : ""} encrypted and
-                stored securely
-              </p>
-            </div>
-
-            {loading ? (
-              <div className="text-center py-12">
-                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Loading files...</p>
-              </div>
-            ) : files.length === 0 ? (
-              <div className="bg-card border border-border rounded-lg p-12 text-center">
-                <Upload className="w-12 h-12 text-muted mx-auto mb-4 opacity-50" />
-                <p className="text-muted-foreground">
-                  No files yet. Upload your first file to get started.
+          <div className="lg:col-span-2 space-y-8">
+            {/* Your Files */}
+            <div>
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-foreground mb-2">
+                  Your Files
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  {ownedFiles.length} file{ownedFiles.length !== 1 ? "s" : ""}{" "}
+                  encrypted and stored securely
                 </p>
               </div>
-            ) : (
-              <FileList
-                files={files}
-                user={user}
-                onRefresh={handleUploadSuccess}
-              />
-            )}
+
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Loading files...</p>
+                </div>
+              ) : ownedFiles.length === 0 ? (
+                <div className="bg-card border border-border rounded-lg p-12 text-center">
+                  <Upload className="w-12 h-12 text-muted mx-auto mb-4 opacity-50" />
+                  <p className="text-muted-foreground">
+                    No files yet. Upload your first file to get started.
+                  </p>
+                </div>
+              ) : (
+                <FileList
+                  files={ownedFiles}
+                  user={user}
+                  onRefresh={handleUploadSuccess}
+                />
+              )}
+            </div>
+
+            <div>
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-foreground mb-2 flex items-center gap-2">
+                  <Share2 className="w-5 h-5" />
+                  Shared Files
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  {sharedFiles.length} file{sharedFiles.length !== 1 ? "s" : ""}{" "}
+                  shared with you
+                </p>
+              </div>
+
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">
+                    Loading shared files...
+                  </p>
+                </div>
+              ) : sharedFiles.length === 0 ? (
+                <div className="bg-card border border-border rounded-lg p-12 text-center">
+                  <Share2 className="w-12 h-12 text-muted mx-auto mb-4 opacity-50" />
+                  <p className="text-muted-foreground">
+                    No files shared with you yet.
+                  </p>
+                </div>
+              ) : (
+                <FileList
+                  files={sharedFiles}
+                  user={user}
+                  onRefresh={handleUploadSuccess}
+                  isSharedView={true}
+                />
+              )}
+            </div>
           </div>
         </div>
       </main>

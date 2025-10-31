@@ -10,10 +10,12 @@ export default function FileList({
   files,
   user,
   onRefresh,
+  isSharedView = false,
 }: {
   files: any[];
   user: any;
   onRefresh: () => void;
+  isSharedView?: boolean;
 }) {
   const [selectedFile, setSelectedFile] = useState<any>(null);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -32,11 +34,15 @@ export default function FileList({
       // Get file metadata to find storage path
       const { data: fileData, error: fetchError } = await supabase
         .from("files")
-        .select("storage_path")
+        .select("storage_path, owner_id")
         .eq("id", fileId)
         .single();
 
       if (fetchError) throw fetchError;
+
+      if (fileData.owner_id !== user.id) {
+        throw new Error("You can only delete files you own");
+      }
 
       // Delete from storage
       const { error: storageError } = await supabase.storage
@@ -67,7 +73,9 @@ export default function FileList({
             key={file.id}
             file={file}
             onShare={() => handleShare(file)}
-            onDelete={() => handleDelete(file.id)}
+            onDelete={isSharedView ? undefined : () => handleDelete(file.id)}
+            canShare={!isSharedView}
+            accessLevel={file.access_level}
           />
         ))}
       </div>
