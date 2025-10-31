@@ -1,85 +1,86 @@
-"use client"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useRef } from "react"
-import { getSupabaseClient } from "@/lib/supabase"
+import { useState, useRef } from "react";
+import { getSupabaseClient } from "@/lib/supabase";
 import {
   generateAESKey,
   encryptFile,
   encryptAESKeyWithRSA,
   calculateChecksum,
   importRSAPublicKeyFromPEM,
-} from "@/lib/crypto"
-import { Upload, AlertCircle, CheckCircle } from "lucide-react"
+} from "@/lib/crypto";
+import { Upload, AlertCircle, CheckCircle } from "lucide-react";
 
 export default function UploadForm({
   user,
   onUploadSuccess,
 }: {
-  user: any
-  onUploadSuccess: () => void
+  user: any;
+  onUploadSuccess: () => void;
 }) {
-  const [file, setFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
+    const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      setFile(selectedFile)
-      setError("")
-      setSuccess("")
+      setFile(selectedFile);
+      setError("");
+      setSuccess("");
     }
-  }
+  };
 
   const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!file) return
+    e.preventDefault();
+    if (!file) return;
 
-    setUploading(true)
-    setError("")
-    setSuccess("")
+    setUploading(true);
+    setError("");
+    setSuccess("");
 
     try {
-      const supabase = getSupabaseClient()
+      const supabase = getSupabaseClient();
 
       // Get user's public key
       const { data: userData, error: userError } = await supabase
         .from("users")
         .select("public_key")
         .eq("id", user.id)
-        .single()
+        .single();
 
-      if (userError) throw userError
+      if (userError) throw userError;
 
       // Read file
-      const fileBuffer = await file.arrayBuffer()
+      const fileBuffer = await file.arrayBuffer();
 
       // Generate AES key
-      const aesKey = await generateAESKey()
+      const aesKey = await generateAESKey();
 
       // Encrypt file
-      const { encrypted, iv } = await encryptFile(fileBuffer, aesKey)
+      const { encrypted, iv } = await encryptFile(fileBuffer, aesKey);
 
       // Calculate checksum
-      const checksum = await calculateChecksum(fileBuffer)
+      const checksum = await calculateChecksum(fileBuffer);
 
       // Encrypt AES key with user's RSA public key
-      const rsaPublicKey = await importRSAPublicKeyFromPEM(userData.public_key)
-      const encryptedAESKey = await encryptAESKeyWithRSA(aesKey, rsaPublicKey)
+      const rsaPublicKey = await importRSAPublicKeyFromPEM(userData.public_key);
+      const encryptedAESKey = await encryptAESKeyWithRSA(aesKey, rsaPublicKey);
 
       // Upload encrypted file to storage
-      const storagePath = `${user.id}/${Date.now()}-${file.name}`
+      const storagePath = `${user.id}/${Date.now()}-${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from("encrypted-files")
         .upload(storagePath, new Blob([encrypted]), {
           contentType: "application/octet-stream",
-        })
+        });
 
-      if (uploadError) throw uploadError
+      if (uploadError) throw uploadError;
 
       // Store metadata
       const { error: metadataError } = await supabase.from("files").insert({
@@ -91,21 +92,21 @@ export default function UploadForm({
         encrypted_aes_key: encryptedAESKey,
         iv: btoa(String.fromCharCode.apply(null, Array.from(iv))),
         checksum,
-      })
+      });
 
-      if (metadataError) throw metadataError
+      if (metadataError) throw metadataError;
 
-      setSuccess(`File "${file.name}" uploaded successfully!`)
-      setFile(null)
-      if (fileInputRef.current) fileInputRef.current.value = ""
-      onUploadSuccess()
+      setSuccess(`File "${file.name}" uploaded successfully!`);
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      onUploadSuccess();
     } catch (err: any) {
-      setError(err.message || "Upload failed")
-      console.error("Upload error:", err)
+      setError(err.message || "Upload failed");
+      console.error("Upload error:", err);
     } finally {
-      setUploading(false)
+      setUploading(false);
     }
-  }
+  };
 
   return (
     <div className="bg-card border border-border rounded-lg p-6">
@@ -118,11 +119,20 @@ export default function UploadForm({
           onClick={() => fileInputRef.current?.click()}
         >
           <Upload className="w-8 h-8 text-muted mx-auto mb-2 opacity-50" />
-          <p className="text-foreground font-medium">{file ? file.name : "Click to select file"}</p>
-          <p className="text-muted-foreground text-sm mt-1">
-            {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "Any file type supported"}
+          <p className="text-foreground font-medium">
+            {file ? file.name : "Click to select file"}
           </p>
-          <input ref={fileInputRef} type="file" onChange={handleFileSelect} className="hidden" />
+          <p className="text-muted-foreground text-sm mt-1">
+            {file
+              ? `${(file.size / 1024 / 1024).toFixed(2)} MB`
+              : "Any file type supported"}
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
         </div>
 
         {/* Error */}
@@ -154,10 +164,10 @@ export default function UploadForm({
       {/* Info */}
       <div className="mt-6 p-4 bg-card border border-border rounded-lg">
         <p className="text-xs text-muted-foreground">
-          <strong>Security:</strong> Files are encrypted client-side with AES-256 before upload. Only you can decrypt
-          them.
+          <strong>Security:</strong> Files are encrypted client-side with
+          AES-256 before upload. Only you can decrypt them.
         </p>
       </div>
     </div>
-  )
+  );
 }

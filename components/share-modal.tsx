@@ -1,10 +1,11 @@
-"use client"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { getSupabaseClient } from "@/lib/supabase"
-import { X, Mail, CheckCircle, AlertCircle } from "lucide-react"
+import { useState } from "react";
+import { getSupabaseClient } from "@/lib/supabase";
+import { X, Mail, CheckCircle, AlertCircle } from "lucide-react";
 
 export default function ShareModal({
   file,
@@ -12,48 +13,52 @@ export default function ShareModal({
   onClose,
   onSuccess,
 }: {
-  file: any
-  user: any
-  onClose: () => void
-  onSuccess: () => void
+  file: any;
+  user: any;
+  onClose: () => void;
+  onSuccess: () => void;
 }) {
-  const [recipientEmail, setRecipientEmail] = useState("")
-  const [accessLevel, setAccessLevel] = useState<"view" | "download" | "share">("view")
-  const [sharing, setSharing] = useState(false)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [accessLevel, setAccessLevel] = useState<"view" | "download" | "share">(
+    "view"
+  );
+  const [sharing, setSharing] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const handleShare = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setSuccess("")
-    setSharing(true)
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setSharing(true);
 
     try {
-      const supabase = getSupabaseClient()
+      const supabase = getSupabaseClient();
 
       // Find recipient user
       const { data: recipientData, error: recipientError } = await supabase
         .from("users")
         .select("id, public_key")
         .eq("email", recipientEmail)
-        .single()
+        .single();
 
-      if (recipientError) throw new Error("Recipient not found")
+      if (recipientError) throw new Error("Recipient not found");
 
       // Get owner's private key (in production, decrypt with password)
       const { data: ownerData, error: ownerError } = await supabase
         .from("users")
         .select("private_key_encrypted")
         .eq("id", user.id)
-        .single()
+        .single();
 
-      if (ownerError) throw ownerError
+      if (ownerError) throw ownerError;
 
       // Decrypt the AES key with owner's private key
       // In production: const privateKeyPEM = await decryptPrivateKey(ownerData.private_key_encrypted, userPassword);
       // For now, we'll show a message
-      alert("Sharing requires private key decryption. This is a security feature.")
+      alert(
+        "Sharing requires private key decryption. This is a security feature."
+      );
 
       // Example flow:
       // const ownerPrivateKey = await importRSAPrivateKeyFromPEM(privateKeyPEM);
@@ -72,16 +77,16 @@ export default function ShareModal({
 
       // if (accessError) throw accessError;
 
-      setSuccess(`File shared with ${recipientEmail}`)
+      setSuccess(`File shared with ${recipientEmail}`);
       setTimeout(() => {
-        onSuccess()
-      }, 1500)
+        onSuccess();
+      }, 1500);
     } catch (err: any) {
-      setError(err.message || "Sharing failed")
+      setError(err.message || "Sharing failed");
     } finally {
-      setSharing(false)
+      setSharing(false);
     }
-  }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -89,7 +94,10 @@ export default function ShareModal({
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-foreground">Share File</h3>
-          <button onClick={onClose} className="p-1 hover:bg-border rounded-lg transition-colors">
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-border rounded-lg transition-colors"
+          >
             <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
@@ -97,8 +105,12 @@ export default function ShareModal({
         <form onSubmit={handleShare} className="space-y-4">
           {/* File Name */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">File</label>
-            <div className="p-3 bg-input border border-border rounded-lg text-foreground text-sm">{file.file_name}</div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              File
+            </label>
+            <div className="p-3 bg-input border border-border rounded-lg text-foreground text-sm">
+              {file.file_name}
+            </div>
           </div>
 
           {/* Recipient Email */}
@@ -119,7 +131,9 @@ export default function ShareModal({
 
           {/* Access Level */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Access Level</label>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Access Level
+            </label>
             <select
               value={accessLevel}
               onChange={(e) => setAccessLevel(e.target.value as any)}
@@ -167,5 +181,5 @@ export default function ShareModal({
         </form>
       </div>
     </div>
-  )
+  );
 }

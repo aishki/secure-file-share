@@ -1,57 +1,63 @@
-"use client"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
 
-import { useState } from "react"
-import { getSupabaseClient } from "@/lib/supabase"
-import FileCard from "./file-card"
-import ShareModal from "./share-modal"
+import { useState } from "react";
+import { getSupabaseClient } from "@/lib/supabase";
+import FileCard from "./file-card";
+import ShareModal from "./share-modal";
 
 export default function FileList({
   files,
   user,
   onRefresh,
 }: {
-  files: any[]
-  user: any
-  onRefresh: () => void
+  files: any[];
+  user: any;
+  onRefresh: () => void;
 }) {
-  const [selectedFile, setSelectedFile] = useState<any>(null)
-  const [showShareModal, setShowShareModal] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<any>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const handleShare = (file: any) => {
-    setSelectedFile(file)
-    setShowShareModal(true)
-  }
+    setSelectedFile(file);
+    setShowShareModal(true);
+  };
 
   const handleDelete = async (fileId: string) => {
-    if (!confirm("Are you sure you want to delete this file?")) return
+    if (!confirm("Are you sure you want to delete this file?")) return;
 
     try {
-      const supabase = getSupabaseClient()
+      const supabase = getSupabaseClient();
 
       // Get file metadata to find storage path
       const { data: fileData, error: fetchError } = await supabase
         .from("files")
         .select("storage_path")
         .eq("id", fileId)
-        .single()
+        .single();
 
-      if (fetchError) throw fetchError
+      if (fetchError) throw fetchError;
 
       // Delete from storage
-      const { error: storageError } = await supabase.storage.from("encrypted-files").remove([fileData.storage_path])
+      const { error: storageError } = await supabase.storage
+        .from("encrypted-files")
+        .remove([fileData.storage_path]);
 
-      if (storageError) throw storageError
+      if (storageError) throw storageError;
 
       // Delete metadata
-      const { error: deleteError } = await supabase.from("files").delete().eq("id", fileId)
+      const { error: deleteError } = await supabase
+        .from("files")
+        .delete()
+        .eq("id", fileId);
 
-      if (deleteError) throw deleteError
+      if (deleteError) throw deleteError;
 
-      onRefresh()
+      onRefresh();
     } catch (err: any) {
-      alert("Delete failed: " + err.message)
+      alert("Delete failed: " + err.message);
     }
-  }
+  };
 
   return (
     <>
@@ -72,11 +78,11 @@ export default function FileList({
           user={user}
           onClose={() => setShowShareModal(false)}
           onSuccess={() => {
-            setShowShareModal(false)
-            onRefresh()
+            setShowShareModal(false);
+            onRefresh();
           }}
         />
       )}
     </>
-  )
+  );
 }
