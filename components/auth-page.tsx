@@ -13,7 +13,7 @@ function formatErrorMessage(error: any): string {
 
   // Handle specific Supabase errors
   if (message.includes("duplicate key")) {
-    return "This email is already registered. Please sign in instead.";
+    return "This email is already registered. Please log in instead.";
   }
   if (message.includes("Invalid login credentials")) {
     return "Invalid email or password. Please try again.";
@@ -105,7 +105,7 @@ export default function AuthPage() {
           }
         }
       } else {
-        // Sign in
+        // Log in
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -113,7 +113,7 @@ export default function AuthPage() {
 
         if (signInError) throw signInError;
 
-        setSuccess("Sign in successful! Redirecting...");
+        setSuccess("Log in successful! Redirecting...");
 
         setTimeout(() => {
           window.location.href = "/";
@@ -204,7 +204,7 @@ export default function AuthPage() {
               disabled={loading}
               className="w-full py-2 px-4 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
-              {loading ? "Loading..." : isSignUp ? "Sign Up" : "Sign In"}
+              {loading ? "Loading..." : isSignUp ? "Sign Up" : "Log In"}
             </button>
           </form>
 
@@ -221,7 +221,7 @@ export default function AuthPage() {
                 className="text-primary hover:underline font-medium"
                 disabled={loading}
               >
-                {isSignUp ? "Sign In" : "Sign Up"}
+                {isSignUp ? "Log In" : "Sign Up"}
               </button>
             </p>
           </div>
