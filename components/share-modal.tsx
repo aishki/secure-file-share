@@ -114,25 +114,45 @@ export default function ShareModal({
     try {
       const supabase = getSupabaseClient();
 
+      console.log("[v0] Starting share process for file:", file.id);
+
       const { data: recipientData, error: recipientError } = await supabase
         .from("users")
         .select("id, public_key")
         .eq("email", recipientEmail)
         .single();
 
-      if (recipientError) throw new Error("Recipient not found");
+      if (recipientError) {
+        throw new Error(`Recipient "${recipientEmail}" not found`);
+      }
 
-      // Check if already shared
-      const { data: existingAccess } = await supabase
+      if (!recipientData || !recipientData.public_key) {
+        throw new Error("Recipient public key not found");
+      }
+
+      console.log("[v0] Found recipient:", recipientData.id);
+
+      // Check if already shared - fix the query to include proper error handling
+      const { data: existingAccess, error: existingError } = await supabase
         .from("file_access")
-        .select("id")
+        .select("id, access_level")
         .eq("file_id", file.id)
         .eq("user_id", recipientData.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to handle no results gracefully
+
+      if (existingError && existingError.code !== "PGRST116") {
+        throw new Error(
+          "Error checking existing access: " + existingError.message
+        );
+      }
 
       if (existingAccess) {
-        throw new Error("File is already shared with this user");
+        throw new Error(
+          `File is already shared with ${recipientEmail} (${existingAccess.access_level})`
+        );
       }
+
+      console.log("[v0] Checking owner's encrypted private key");
 
       const { data: ownerData, error: ownerError } = await supabase
         .from("users")
@@ -140,7 +160,20 @@ export default function ShareModal({
         .eq("id", user.id)
         .single();
 
-      if (ownerError) throw ownerError;
+      if (ownerError)
+        throw new Error(
+          "Could not retrieve owner private key: " + ownerError.message
+        );
+      if (!ownerData?.private_key_encrypted)
+        throw new Error("Owner's private key not found");
+
+      if (!file.encrypted_aes_key) {
+        throw new Error(
+          "File AES key not found. Please try uploading the file again."
+        );
+      }
+
+      console.log("[v0] Decrypting AES key with owner's private key");
 
       // In production, this would be decrypted with a user password
       const ownerPrivateKeyPEM = ownerData.private_key_encrypted;
@@ -153,6 +186,8 @@ export default function ShareModal({
         ownerPrivateKey
       );
 
+      console.log("[v0] Encrypting AES key for recipient");
+
       const recipientPublicKeyPEM = recipientData.public_key;
       const recipientPublicKey = await importRSAPublicKeyFromPEM(
         recipientPublicKeyPEM
@@ -162,6 +197,8 @@ export default function ShareModal({
         recipientPublicKey
       );
 
+      console.log("[v0] Inserting file_access record");
+
       const { error: accessError } = await supabase.from("file_access").insert({
         file_id: file.id,
         user_id: recipientData.id,
@@ -170,16 +207,26 @@ export default function ShareModal({
         shared_by: user.id,
       });
 
-      if (accessError) throw accessError;
+      if (accessError) {
+        console.error("[v0] Access error:", accessError);
+        throw new Error(`Sharing failed: ${accessError.message}`);
+      }
 
-      await supabase.from("audit_log").insert({
+      console.log("[v0] Inserting audit log");
+
+      const { error: auditError } = await supabase.from("audit_log").insert({
         user_id: user.id,
         action: "share",
         file_id: file.id,
         target_user_id: recipientData.id,
       });
 
-      setSuccess(`File shared with ${recipientEmail}`);
+      if (auditError) {
+        console.error("[v0] Audit log error:", auditError);
+        // Don't fail if audit log fails
+      }
+
+      setSuccess(`File shared with ${recipientEmail} as ${accessLevel}`);
       setRecipientEmail("");
       setAccessLevel("viewer");
       await loadAccessList();
@@ -188,7 +235,10 @@ export default function ShareModal({
         onSuccess();
       }, 1500);
     } catch (err: any) {
-      setError(err.message || "Sharing failed");
+      console.error("[v0] Share error:", err);
+      setError(
+        err.message || "Sharing failed. Please check the console for details."
+      );
     } finally {
       setSharing(false);
     }
