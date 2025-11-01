@@ -3,18 +3,23 @@
 
 import { useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
-import { Download, Share2, Trash2, Lock } from "lucide-react";
+import { Download, Share2, Trash2, Lock, AlertCircle } from "lucide-react";
 
 export default function FileCard({
   file,
   onShare,
   onDelete,
+  canShare = true,
+  accessLevel,
 }: {
   file: any;
   onShare: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
+  canShare?: boolean;
+  accessLevel?: string;
 }) {
   const [downloading, setDownloading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -36,13 +41,13 @@ export default function FileCard({
 
       if (userError) throw userError;
 
-      // For now, we'll show a message that decryption requires the private key
-      // In production, you'd decrypt the private key with the user's password
+      // Temp message that decryption requires the private key
+      // In production, decrypt the private key with the user's password
       alert(
         "Download feature requires private key decryption setup. This is a security feature."
       );
 
-      // Example of how it would work:
+      // Example:
       // const privateKeyPEM = await decryptPrivateKey(userData.private_key_encrypted, userPassword);
       // const rsaPrivateKey = await importRSAPrivateKeyFromPEM(privateKeyPEM);
       // const aesKey = await decryptAESKeyWithRSA(file.encrypted_aes_key, rsaPrivateKey);
@@ -75,6 +80,23 @@ export default function FileCard({
     });
   };
 
+  const getRoleDescription = (role?: string) => {
+    switch (role?.toLowerCase()) {
+      case "viewer":
+        return "Viewer";
+      case "downloader":
+        return "Downloader";
+      case "collaborator":
+        return "Collaborator";
+      default:
+        return null;
+    }
+  };
+
+  const canDownload =
+    !accessLevel || ["downloader", "collaborator"].includes(accessLevel);
+  const canShareFile = !accessLevel || accessLevel === "collaborator";
+
   return (
     <div className="bg-card border border-border rounded-lg p-4 hover:border-primary transition-colors">
       <div className="flex items-start justify-between">
@@ -88,33 +110,79 @@ export default function FileCard({
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <span>{formatFileSize(file.file_size)}</span>
             <span>{formatDate(file.created_at)}</span>
+            {accessLevel && (
+              <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded capitalize">
+                {getRoleDescription(accessLevel)}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 ml-4">
-          <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className="p-2 hover:bg-border rounded-lg transition-colors disabled:opacity-50"
-            title="Download"
-          >
-            <Download className="w-4 h-4 text-muted-foreground" />
-          </button>
-          <button
-            onClick={onShare}
-            className="p-2 hover:bg-border rounded-lg transition-colors"
-            title="Share"
-          >
-            <Share2 className="w-4 h-4 text-muted-foreground" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-2 hover:bg-error/10 rounded-lg transition-colors"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4 text-error" />
-          </button>
+        <div className="flex items-center gap-2 ml-4 relative">
+          {canDownload && (
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              className="p-2 hover:bg-border rounded-lg transition-colors disabled:opacity-50"
+              title="Download"
+            >
+              <Download className="w-4 h-4 text-muted-foreground" />
+            </button>
+          )}
+
+          {canShare && canShareFile && (
+            <button
+              onClick={onShare}
+              className="p-2 hover:bg-border rounded-lg transition-colors"
+              title="Share"
+            >
+              <Share2 className="w-4 h-4 text-muted-foreground" />
+            </button>
+          )}
+
+          {onDelete && (
+            <div>
+              <button
+                onClick={() => setShowDeleteConfirm(!showDeleteConfirm)}
+                className="p-2 hover:bg-error/10 rounded-lg transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="w-4 h-4 text-error" />
+              </button>
+              {showDeleteConfirm && (
+                <div className="absolute right-0 top-full mt-2 bg-card border border-border rounded-lg shadow-lg p-3 z-10 whitespace-nowrap">
+                  <p className="text-sm text-foreground mb-2">Delete file?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        onDelete();
+                        setShowDeleteConfirm(false);
+                      }}
+                      className="px-3 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="px-3 py-1 bg-border text-foreground rounded text-xs hover:bg-border/80"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!canDownload && accessLevel && (
+            <div
+              className="p-2 text-muted-foreground hover:text-foreground cursor-help"
+              title={`You have ${accessLevel} access - cannot download`}
+            >
+              <AlertCircle className="w-4 h-4" />
+            </div>
+          )}
         </div>
       </div>
     </div>

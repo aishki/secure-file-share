@@ -3,9 +3,15 @@
 
 import type React from "react";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
-import { X, Mail, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  encryptAESKeyWithRSA,
+  importRSAPublicKeyFromPEM,
+  importRSAPrivateKeyFromPEM,
+  decryptAESKeyWithRSA,
+} from "@/lib/crypto";
+import { X, Mail, Trash2, Eye, Download, Share2 } from "lucide-react";
 
 export default function ShareModal({
   file,
@@ -19,12 +25,85 @@ export default function ShareModal({
   onSuccess: () => void;
 }) {
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [accessLevel, setAccessLevel] = useState<"view" | "download" | "share">(
-    "view"
-  );
+  const [accessLevel, setAccessLevel] = useState<
+    "viewer" | "downloader" | "collaborator"
+  >("viewer");
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [peopleWithAccess, setPeopleWithAccess] = useState<any[]>([]);
+  const [accessUsers, setAccessUsers] = useState<Map<string, string>>(
+    new Map()
+  );
+  const [loadingAccess, setLoadingAccess] = useState(true);
+
+  useEffect(() => {
+    loadAccessList();
+  }, [file.id]);
+
+  const loadAccessList = async () => {
+    try {
+      setLoadingAccess(true);
+      const supabase = getSupabaseClient();
+
+      const { data, error } = await supabase
+        .from("file_access")
+        .select(
+          `
+          id,
+          user_id,
+          access_level,
+          shared_by,
+          users!user_id(email)
+        `
+        )
+        .eq("file_id", file.id);
+
+      if (error) throw error;
+
+      // Map user IDs to access levels
+      const accessMap = new Map<string, string>();
+      const people: any[] = [];
+
+      // Add owner first
+      const { data: ownerData } = await supabase
+        .from("users")
+        .select("email")
+        .eq("id", file.owner_id)
+        .single();
+
+      if (ownerData) {
+        people.push({
+          id: file.owner_id,
+          email: ownerData.email,
+          role: "Owner",
+          isOwner: true,
+        });
+        accessMap.set(file.owner_id, "Owner");
+      }
+
+      // Add shared users
+      data?.forEach((access: any) => {
+        if (access.users) {
+          people.push({
+            id: access.user_id,
+            email: access.users.email,
+            role: access.access_level,
+            accessId: access.id,
+            isOwner: false,
+          });
+          accessMap.set(access.user_id, access.access_level);
+        }
+      });
+
+      setPeopleWithAccess(people);
+      setAccessUsers(accessMap);
+    } catch (err) {
+      console.error("Error loading access list:", err);
+    } finally {
+      setLoadingAccess(false);
+    }
+  };
 
   const handleShare = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +114,6 @@ export default function ShareModal({
     try {
       const supabase = getSupabaseClient();
 
-      // Find recipient user
       const { data: recipientData, error: recipientError } = await supabase
         .from("users")
         .select("id, public_key")
@@ -44,7 +122,18 @@ export default function ShareModal({
 
       if (recipientError) throw new Error("Recipient not found");
 
-      // Get owner's private key (in production, decrypt with password)
+      // Check if already shared
+      const { data: existingAccess } = await supabase
+        .from("file_access")
+        .select("id")
+        .eq("file_id", file.id)
+        .eq("user_id", recipientData.id)
+        .single();
+
+      if (existingAccess) {
+        throw new Error("File is already shared with this user");
+      }
+
       const { data: ownerData, error: ownerError } = await supabase
         .from("users")
         .select("private_key_encrypted")
@@ -53,31 +142,48 @@ export default function ShareModal({
 
       if (ownerError) throw ownerError;
 
-      // Decrypt the AES key with owner's private key
-      // In production: const privateKeyPEM = await decryptPrivateKey(ownerData.private_key_encrypted, userPassword);
-      // For now, we'll show a message
-      alert(
-        "Sharing requires private key decryption. This is a security feature."
+      // In production, this would be decrypted with a user password
+      const ownerPrivateKeyPEM = ownerData.private_key_encrypted;
+      const ownerPrivateKey = await importRSAPrivateKeyFromPEM(
+        ownerPrivateKeyPEM
       );
 
-      // Example flow:
-      // const ownerPrivateKey = await importRSAPrivateKeyFromPEM(privateKeyPEM);
-      // const aesKey = await decryptAESKeyWithRSA(file.encrypted_aes_key, ownerPrivateKey);
-      // const recipientPublicKey = await importRSAPublicKeyFromPEM(recipientData.public_key);
-      // const encryptedAESKeyForRecipient = await encryptAESKeyWithRSA(aesKey, recipientPublicKey);
+      const aesKey = await decryptAESKeyWithRSA(
+        file.encrypted_aes_key,
+        ownerPrivateKey
+      );
 
-      // // Create file_access record
-      // const { error: accessError } = await supabase.from('file_access').insert({
-      //   file_id: file.id,
-      //   user_id: recipientData.id,
-      //   encrypted_aes_key: encryptedAESKeyForRecipient,
-      //   access_level: accessLevel,
-      //   shared_by: user.id,
-      // });
+      const recipientPublicKeyPEM = recipientData.public_key;
+      const recipientPublicKey = await importRSAPublicKeyFromPEM(
+        recipientPublicKeyPEM
+      );
+      const encryptedAESKeyForRecipient = await encryptAESKeyWithRSA(
+        aesKey,
+        recipientPublicKey
+      );
 
-      // if (accessError) throw accessError;
+      const { error: accessError } = await supabase.from("file_access").insert({
+        file_id: file.id,
+        user_id: recipientData.id,
+        encrypted_aes_key: encryptedAESKeyForRecipient,
+        access_level: accessLevel,
+        shared_by: user.id,
+      });
+
+      if (accessError) throw accessError;
+
+      await supabase.from("audit_log").insert({
+        user_id: user.id,
+        action: "share",
+        file_id: file.id,
+        target_user_id: recipientData.id,
+      });
 
       setSuccess(`File shared with ${recipientEmail}`);
+      setRecipientEmail("");
+      setAccessLevel("viewer");
+      await loadAccessList();
+
       setTimeout(() => {
         onSuccess();
       }, 1500);
@@ -88,11 +194,77 @@ export default function ShareModal({
     }
   };
 
+  const handleAccessLevelChange = async (userId: string, newLevel: string) => {
+    try {
+      const supabase = getSupabaseClient();
+
+      const { data: accessRecord } = await supabase
+        .from("file_access")
+        .select("id")
+        .eq("file_id", file.id)
+        .eq("user_id", userId)
+        .single();
+
+      if (!accessRecord) throw new Error("Access record not found");
+
+      const { error } = await supabase
+        .from("file_access")
+        .update({ access_level: newLevel })
+        .eq("id", accessRecord.id);
+
+      if (error) throw error;
+
+      await loadAccessList();
+    } catch (err: any) {
+      setError(err.message || "Failed to update access level");
+    }
+  };
+
+  const handleRemoveAccess = async (userId: string) => {
+    if (!confirm("Remove access for this user?")) return;
+
+    try {
+      const supabase = getSupabaseClient();
+
+      const { error } = await supabase
+        .from("file_access")
+        .delete()
+        .eq("file_id", file.id)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+
+      await supabase.from("audit_log").insert({
+        user_id: user.id,
+        action: "revoke_access",
+        file_id: file.id,
+        target_user_id: userId,
+      });
+
+      await loadAccessList();
+    } catch (err: any) {
+      setError(err.message || "Failed to remove access");
+    }
+  };
+
+  const getRoleIcon = (role: string) => {
+    switch (role.toLowerCase()) {
+      case "viewer":
+        return <Eye className="w-4 h-4" />;
+      case "downloader":
+        return <Download className="w-4 h-4" />;
+      case "collaborator":
+        return <Share2 className="w-4 h-4" />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-card border border-border rounded-lg max-w-md w-full p-6">
+      <div className="bg-card border border-border rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-foreground">Share File</h3>
           <button
             onClick={onClose}
@@ -102,83 +274,137 @@ export default function ShareModal({
           </button>
         </div>
 
-        <form onSubmit={handleShare} className="space-y-4">
-          {/* File Name */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              File
-            </label>
-            <div className="p-3 bg-input border border-border rounded-lg text-foreground text-sm">
-              {file.file_name}
-            </div>
-          </div>
+        {/* File Name */}
+        <div className="mb-6 p-3 bg-input border border-border rounded-lg">
+          <p className="text-sm text-muted-foreground">File</p>
+          <p className="font-medium text-foreground text-sm break-all">
+            {file.file_name}
+          </p>
+        </div>
 
+        {/* Share Form */}
+        <form
+          onSubmit={handleShare}
+          className="space-y-4 mb-6 pb-6 border-b border-border"
+        >
           {/* Recipient Email */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
               <Mail className="w-4 h-4 inline mr-2" />
-              Recipient Email
+              Add People
             </label>
-            <input
-              type="email"
-              value={recipientEmail}
-              onChange={(e) => setRecipientEmail(e.target.value)}
-              placeholder="recipient@example.com"
-              className="w-full px-4 py-2 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              required
-            />
-          </div>
-
-          {/* Access Level */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Access Level
-            </label>
-            <select
-              value={accessLevel}
-              onChange={(e) => setAccessLevel(e.target.value as any)}
-              className="w-full px-4 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="view">View Only</option>
-              <option value="download">Download</option>
-              <option value="share">Can Share</option>
-            </select>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={recipientEmail}
+                onChange={(e) => setRecipientEmail(e.target.value)}
+                placeholder="email@example.com"
+                className="flex-1 px-3 py-2 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                required
+              />
+              <select
+                value={accessLevel}
+                onChange={(e) => setAccessLevel(e.target.value as any)}
+                className="px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="viewer">Viewer</option>
+                <option value="downloader">Downloader</option>
+                <option value="collaborator">Collaborator</option>
+              </select>
+            </div>
           </div>
 
           {/* Error */}
           {error && (
-            <div className="p-3 bg-error/10 border border-error rounded-lg flex items-start gap-2 text-error text-sm">
-              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm flex items-start gap-2">
+              <span className="mt-0.5">⚠️</span>
               <span>{error}</span>
             </div>
           )}
 
           {/* Success */}
           {success && (
-            <div className="p-3 bg-success/10 border border-success rounded-lg flex items-start gap-2 text-success text-sm">
-              <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div className="p-3 bg-green-500/10 border border-green-500/50 rounded-lg text-green-500 text-sm flex items-start gap-2">
+              <span className="mt-0.5">✓</span>
               <span>{success}</span>
             </div>
           )}
 
-          {/* Buttons */}
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2 px-4 bg-border text-foreground rounded-lg font-medium hover:bg-border/80 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={sharing}
-              className="flex-1 py-2 px-4 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-            >
-              {sharing ? "Sharing..." : "Share"}
-            </button>
-          </div>
+          {/* Share Button */}
+          <button
+            type="submit"
+            disabled={sharing}
+            className="w-full py-2 px-4 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
+            {sharing ? "Sharing..." : "Share"}
+          </button>
         </form>
+
+        {/* People with Access */}
+        <div>
+          <h4 className="text-sm font-bold text-foreground mb-3">
+            People with access
+          </h4>
+
+          {loadingAccess ? (
+            <div className="text-center py-4">
+              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+            </div>
+          ) : peopleWithAccess.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No one yet</p>
+          ) : (
+            <div className="space-y-2">
+              {peopleWithAccess.map((person) => (
+                <div
+                  key={person.id}
+                  className="flex items-center justify-between p-3 bg-input rounded-lg"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {person.email}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {person.role}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {person.isOwner ? (
+                      <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded">
+                        Owner
+                      </span>
+                    ) : file.owner_id === user.id ? (
+                      <>
+                        <select
+                          value={person.role}
+                          onChange={(e) =>
+                            handleAccessLevelChange(person.id, e.target.value)
+                          }
+                          className="text-xs px-2 py-1 bg-input border border-border rounded text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                          <option value="viewer">Viewer</option>
+                          <option value="downloader">Downloader</option>
+                          <option value="collaborator">Collaborator</option>
+                        </select>
+                        <button
+                          onClick={() => handleRemoveAccess(person.id)}
+                          className="p-1 hover:bg-red-500/10 rounded transition-colors text-muted-foreground hover:text-red-500"
+                          title="Remove access"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs px-2 py-1 bg-muted/50 text-muted-foreground rounded cursor-default">
+                        {person.role}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
