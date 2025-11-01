@@ -5,7 +5,11 @@ import type React from "react";
 
 import { useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase";
-import { generateRSAKeyPair, exportRSAPublicKeyToPEM } from "@/lib/crypto";
+import {
+  generateRSAKeyPair,
+  exportRSAPublicKeyToPEM,
+  exportRSAPrivateKeyToPEM,
+} from "@/lib/crypto";
 import { Lock, Mail, Key, AlertCircle, CheckCircle } from "lucide-react";
 
 function formatErrorMessage(error: any): string {
@@ -59,10 +63,7 @@ export default function AuthPage() {
           throw new Error("Password must be at least 6 characters long");
         }
 
-        // Generate RSA key pair for new user
-        const keyPair = await generateRSAKeyPair();
-        const publicKeyPEM = await exportRSAPublicKeyToPEM(keyPair.publicKey);
-
+        // 1️⃣ Create the account first
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -74,35 +75,64 @@ export default function AuthPage() {
         if (signUpError) throw signUpError;
 
         if (data.user) {
-          try {
-            // Wait a moment for the trigger to create the user record
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+          // 2️⃣ Generate RSA key pair for the new user
+          const keyPair = await generateRSAKeyPair();
+          const publicKeyPEM = await exportRSAPublicKeyToPEM(keyPair.publicKey);
+          const privateKeyPEM = await exportRSAPrivateKeyToPEM(
+            keyPair.privateKey
+          );
 
-            const { error: updateError } = await supabase
-              .from("users")
-              .update({ public_key: publicKeyPEM })
-              .eq("id", data.user.id);
+          // 3️⃣ Encrypt private key with password (AES-GCM)
+          const encoder = new TextEncoder();
+          const keyMaterial = encoder.encode(password);
+          const keyHash = await crypto.subtle.digest("SHA-256", keyMaterial);
+          const key = await crypto.subtle.importKey(
+            "raw",
+            keyHash,
+            "AES-GCM",
+            false,
+            ["encrypt", "decrypt"]
+          );
 
-            if (updateError) {
-              console.error(
-                "[v0] Error updating user public key:",
-                updateError
-              );
-              throw updateError;
-            }
+          const iv = crypto.getRandomValues(new Uint8Array(12));
+          const encryptedPrivateKey = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv },
+            key,
+            encoder.encode(privateKeyPEM)
+          );
 
-            setSuccess("Account created successfully! Redirecting...");
-            setEmail("");
-            setPassword("");
+          const encryptedPrivateKeyString = btoa(
+            JSON.stringify({
+              iv: Array.from(iv),
+              data: Array.from(new Uint8Array(encryptedPrivateKey)),
+            })
+          );
 
-            // Auto-redirect to dashboard after brief delay
-            setTimeout(() => {
-              window.location.href = "/";
-            }, 1500);
-          } catch (err: any) {
-            console.error("[v0] Error in post-signup:", err);
-            throw err;
+          // 4️⃣ Wait for the trigger to insert user record
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          // 5️⃣ Update the user's record in the public.users table
+          const { error: updateError } = await supabase
+            .from("users")
+            .update({
+              public_key: publicKeyPEM,
+              private_key_encrypted: encryptedPrivateKeyString,
+            })
+            .eq("id", data.user.id);
+
+          if (updateError) {
+            console.error("[v0] Error updating user keys:", updateError);
+            throw updateError;
           }
+
+          // ✅ Done
+          setSuccess("Account created successfully! Redirecting...");
+          setEmail("");
+          setPassword("");
+
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 1500);
         }
       } else {
         // Log in
