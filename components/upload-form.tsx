@@ -12,7 +12,28 @@ import {
   calculateChecksum,
   importRSAPublicKeyFromPEM,
 } from "@/lib/crypto";
-import { Upload, AlertCircle, CheckCircle } from "lucide-react";
+import { Upload, AlertCircle, CheckCircle, Info } from "lucide-react";
+
+const sanitizeFilename = (
+  filename: string
+): { sanitized: string; wasModified: boolean } => {
+  const extension =
+    filename.lastIndexOf(".") > -1
+      ? filename.slice(filename.lastIndexOf("."))
+      : "";
+  const nameWithoutExt =
+    filename.lastIndexOf(".") > -1
+      ? filename.slice(0, filename.lastIndexOf("."))
+      : filename;
+
+  // Keep only letters, numbers, underscores, and hyphens
+  const sanitized = nameWithoutExt.replace(/[^a-zA-Z0-9_-]/g, "") + extension;
+
+  return {
+    sanitized: sanitized || "file",
+    wasModified: sanitized !== nameWithoutExt,
+  };
+};
 
 export default function UploadForm({
   user,
@@ -25,11 +46,22 @@ export default function UploadForm({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [sanitizeInfo, setSanitizeInfo] = useState(""); // Add state for sanitization info
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      const { sanitized, wasModified } = sanitizeFilename(selectedFile.name);
+
+      if (wasModified) {
+        setSanitizeInfo(
+          `File name is sanitized to remove symbols except letters, numbers, "_" and "-"`
+        );
+      } else {
+        setSanitizeInfo("");
+      }
+
       setFile(selectedFile);
       setError("");
       setSuccess("");
@@ -72,8 +104,9 @@ export default function UploadForm({
       const rsaPublicKey = await importRSAPublicKeyFromPEM(userData.public_key);
       const encryptedAESKey = await encryptAESKeyWithRSA(aesKey, rsaPublicKey);
 
-      // Upload encrypted file to storage
-      const storagePath = `${user.id}/${Date.now()}-${file.name}`;
+      const { sanitized: sanitizedName } = sanitizeFilename(file.name);
+      const storagePath = `${user.id}/${Date.now()}-${sanitizedName}`;
+
       const { error: uploadError } = await supabase.storage
         .from("encrypted-files")
         .upload(storagePath, new Blob([encrypted]), {
@@ -87,7 +120,7 @@ export default function UploadForm({
         .from("files")
         .insert({
           owner_id: user.id,
-          file_name: file.name,
+          file_name: sanitizedName, // Use sanitized filename
           file_size: file.size,
           file_type: file.type,
           storage_path: storagePath,
@@ -102,20 +135,20 @@ export default function UploadForm({
       const { error: auditError } = await supabase.from("audit_log").insert({
         user_id: user.id,
         action: "upload",
-        file_id: fileData?.id || null, // We don't have the file ID yet, but we can fetch it
+        file_id: fileData?.id || null,
         details: {
-          file_name: file.name,
+          file_name: sanitizedName,
           file_size: file.size,
         },
       });
 
       if (auditError) {
         console.error("[v0] Audit log error:", auditError);
-        // Don't fail the upload if audit fails
       }
 
-      setSuccess(`File "${file.name}" uploaded successfully!`);
+      setSuccess(`File "${sanitizedName}" uploaded successfully!`);
       setFile(null);
+      setSanitizeInfo(""); // Clear sanitization info after upload
       if (fileInputRef.current) fileInputRef.current.value = "";
       onUploadSuccess();
     } catch (err: any) {
@@ -152,6 +185,14 @@ export default function UploadForm({
             className="hidden"
           />
         </div>
+
+        {/* Sanitization Info */}
+        {sanitizeInfo && (
+          <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-start gap-2 text-blue-400 text-sm">
+            <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>{sanitizeInfo}</span>
+          </div>
+        )}
 
         {/* Error */}
         {error && (
