@@ -49,6 +49,15 @@ export default function UploadForm({
   const [sanitizeInfo, setSanitizeInfo] = useState(""); // Add state for sanitization info
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const truncateFilename = (name: string, maxLength: number = 25) => {
+    if (name.length <= maxLength) return name;
+    const extIndex = name.lastIndexOf(".");
+    const ext = extIndex !== -1 ? name.slice(extIndex) : "";
+    const base = extIndex !== -1 ? name.slice(0, extIndex) : name;
+    const truncatedBase = base.slice(0, maxLength - ext.length - 3); // 3 for "..."
+    return `${truncatedBase}...${ext}`;
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
@@ -146,7 +155,9 @@ export default function UploadForm({
         console.error("[v0] Audit log error:", auditError);
       }
 
-      setSuccess(`File "${sanitizedName}" uploaded successfully!`);
+      setSuccess(
+        `File ${truncateFilename(sanitizedName)} uploaded successfully!`
+      );
       setFile(null);
       setSanitizeInfo(""); // Clear sanitization info after upload
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -206,7 +217,7 @@ export default function UploadForm({
         {success && (
           <div className="p-3 bg-success/10 border border-success rounded-lg flex items-start gap-2 text-success text-sm">
             <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            <span className="truncate">{success}</span>
+            <span>{success}</span>
           </div>
         )}
 
