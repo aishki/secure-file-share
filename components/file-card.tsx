@@ -24,6 +24,15 @@ export default function FileCard({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { privateKeyDecrypted } = useAuth();
 
+  const truncateFilename = (name: string, maxLength: number = 50) => {
+    if (name.length <= maxLength) return name;
+    const extIndex = name.lastIndexOf(".");
+    const ext = extIndex !== -1 ? name.slice(extIndex) : "";
+    const base = extIndex !== -1 ? name.slice(0, extIndex) : name;
+    const truncatedBase = base.slice(0, maxLength - ext.length - 3); // 3 for "..."
+    return `${truncatedBase}...${ext}`;
+  };
+
   const handleDownload = async () => {
     setDownloading(true);
     try {
@@ -123,7 +132,7 @@ export default function FileCard({
             <div className="flex items-center gap-2 mb-2">
               <Lock className="w-4 h-4 text-gray-400" />
               <h4 className="font-medium text-foreground truncate">
-                {file.file_name}
+                {truncateFilename(file.file_name)}
               </h4>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">

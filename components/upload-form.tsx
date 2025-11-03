@@ -173,7 +173,7 @@ export default function UploadForm({
           <p className="text-foreground font-medium">
             {file ? file.name : "Click to select file"}
           </p>
-          <p className="text-muted-foreground text-sm mt-1">
+          <p className="text-muted-foreground text-sm mt-1 truncate">
             {file
               ? `${(file.size / 1024 / 1024).toFixed(2)} MB`
               : "Any file type supported"}
@@ -189,7 +189,7 @@ export default function UploadForm({
         {/* Sanitization Info */}
         {sanitizeInfo && (
           <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-start gap-2 text-blue-400 text-sm">
-            <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <Info className="w-4 h-4 mt-0.5 flex-shrink-0 truncate" />
             <span>{sanitizeInfo}</span>
           </div>
         )}
@@ -205,7 +205,7 @@ export default function UploadForm({
         {/* Success */}
         {success && (
           <div className="p-3 bg-success/10 border border-success rounded-lg flex items-start gap-2 text-success text-sm">
-            <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0 truncate" />
             <span>{success}</span>
           </div>
         )}
