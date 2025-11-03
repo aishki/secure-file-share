@@ -205,8 +205,8 @@ export default function UploadForm({
         {/* Success */}
         {success && (
           <div className="p-3 bg-success/10 border border-success rounded-lg flex items-start gap-2 text-success text-sm">
-            <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0 truncate" />
-            <span>{success}</span>
+            <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span className="truncate">{success}</span>
           </div>
         )}
 
