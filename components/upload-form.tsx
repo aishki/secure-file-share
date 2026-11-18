@@ -14,6 +14,9 @@ import {
 } from "@/lib/crypto";
 import { Upload, AlertCircle, CheckCircle, Info } from "lucide-react";
 
+// Must match the encrypted-files bucket limit (see supabase/migrations).
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+
 const sanitizeFilename = (
   filename: string
 ): { sanitized: string; wasModified: boolean } => {
@@ -61,6 +64,15 @@ export default function UploadForm({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      if (selectedFile.size > MAX_FILE_SIZE) {
+        setFile(null);
+        setSanitizeInfo("");
+        setSuccess("");
+        setError("File is too large. Maximum size is 100 MB.");
+        e.target.value = "";
+        return;
+      }
+
       const { sanitized, wasModified } = sanitizeFilename(selectedFile.name);
 
       if (wasModified) {
@@ -173,7 +185,7 @@ export default function UploadForm({
           <p className="text-muted-foreground text-sm mt-1 truncate">
             {file
               ? `${(file.size / 1024 / 1024).toFixed(2)} MB`
-              : "Any file type supported"}
+              : "Any file type, up to 100 MB"}
           </p>
           <input
             ref={fileInputRef}
