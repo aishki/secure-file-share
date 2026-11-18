@@ -1,6 +1,6 @@
 export interface User {
   id: string
-  email: string
+  username: string
   full_name: string | null
   public_key: string
   created_at: string
@@ -26,7 +26,7 @@ export interface FileAccess {
   file_id: string
   user_id: string
   encrypted_aes_key: string
-  access_level: "view" | "download" | "share"
+  access_level: "viewer" | "downloader" | "collaborator"
   shared_by: string
   created_at: string
 }
@@ -34,9 +34,16 @@ export interface FileAccess {
 export interface AuditLog {
   id: string
   user_id: string | null
-  action: "upload" | "download" | "share" | "delete"
+  action:
+    | "upload"
+    | "download"
+    | "share"
+    | "delete"
+    | "revoke_access"
+    | "access_change"
   file_id: string | null
   target_user_id: string | null
+  details: Record<string, unknown> | null
   ip_address: string | null
   user_agent: string | null
   created_at: string

@@ -125,7 +125,7 @@ export default function UploadForm({
       if (uploadError) throw uploadError;
 
       // Store metadata
-      const { error: metadataError, data: fileData } = await supabase
+      const { error: metadataError } = await supabase
         .from("files")
         .insert({
           owner_id: user.id,
@@ -139,21 +139,7 @@ export default function UploadForm({
         });
 
       if (metadataError) throw metadataError;
-
-      // Insert audit log
-      const { error: auditError } = await supabase.from("audit_log").insert({
-        user_id: user.id,
-        action: "upload",
-        file_id: fileData?.id || null,
-        details: {
-          file_name: sanitizedName,
-          file_size: file.size,
-        },
-      });
-
-      if (auditError) {
-        console.error("[v0] Audit log error:", auditError);
-      }
+      // The audit entry is written by a database trigger.
 
       setSuccess(
         `File ${truncateFilename(sanitizedName)} uploaded successfully!`

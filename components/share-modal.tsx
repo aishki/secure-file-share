@@ -10,7 +10,8 @@ import {
   importRSAPublicKeyFromPEM,
   decryptAESKeyWithRSA,
 } from "@/lib/crypto";
-import { X, Mail, Trash2, Download, Share2 } from "lucide-react";
+import { X, User as UserIcon, Trash2, Download, Share2 } from "lucide-react";
+import { displayName, normalizeUsername } from "@/lib/username";
 
 export default function ShareModal({
   file,
@@ -23,7 +24,7 @@ export default function ShareModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [recipientEmail, setRecipientEmail] = useState("");
+  const [recipientUsername, setRecipientUsername] = useState("");
   const [accessLevel, setAccessLevel] = useState<"downloader" | "collaborator">(
     "downloader"
   );
@@ -54,7 +55,7 @@ export default function ShareModal({
           user_id,
           access_level,
           shared_by,
-          users!user_id(email)
+          users!user_id(username)
         `
         )
         .eq("file_id", file.id);
@@ -68,7 +69,7 @@ export default function ShareModal({
       // Add owner first
       const { data: ownerData, error: ownerError } = await supabase
         .from("users")
-        .select("email")
+        .select("username")
         .eq("id", file.owner_id)
         .maybeSingle();
 
@@ -77,7 +78,7 @@ export default function ShareModal({
       if (ownerData) {
         people.push({
           id: file.owner_id,
-          email: ownerData.email,
+          username: ownerData.username,
           role: "Owner",
           isOwner: true,
         });
@@ -89,9 +90,10 @@ export default function ShareModal({
         if (access.users) {
           people.push({
             id: access.user_id,
-            email: access.users.email,
+            username: access.users.username,
             role: access.access_level,
             accessId: access.id,
+            sharedBy: access.shared_by,
             isOwner: false,
           });
           accessMap.set(access.user_id, access.access_level);
@@ -116,24 +118,33 @@ export default function ShareModal({
     try {
       const supabase = getSupabaseClient();
 
-      if (recipientEmail.toLowerCase() === user.email.toLowerCase()) {
-        throw new Error("You can't add yourself! You're the owner.");
+      const recipientName = normalizeUsername(recipientUsername);
+      if (recipientName === displayName(user)) {
+        throw new Error("You can't share a file with yourself.");
       }
 
       console.log("[v0] Starting share process for file:", file.id);
 
-      const { data: recipientData, error: recipientError } = await supabase
-        .from("users")
-        .select("id, public_key")
-        .eq("email", recipientEmail)
-        .single();
+      // Exact-match lookup; the users table is not listable.
+      const { data, error: recipientError } = await supabase
+        .rpc("find_user_by_username", { p_username: recipientName })
+        .maybeSingle();
+      const recipientData = data as {
+        id: string;
+        username: string;
+        public_key: string;
+      } | null;
 
       if (recipientError) {
-        throw new Error(`Recipient "${recipientEmail}" not found`);
+        throw new Error("Could not look up recipient. Please try again.");
       }
 
-      if (!recipientData || !recipientData.public_key) {
-        throw new Error("Recipient public key not found");
+      if (!recipientData) {
+        throw new Error(`No user named "${recipientName}" was found.`);
+      }
+
+      if (recipientData.id === user.id) {
+        throw new Error("You can't share a file with yourself.");
       }
 
       console.log("[v0] Found recipient:", recipientData.id);
@@ -154,7 +165,7 @@ export default function ShareModal({
 
       if (existingAccess) {
         throw new Error(
-          `File is already shared with ${recipientEmail} (${existingAccess.access_level})`
+          `File is already shared with ${recipientUsername} (${existingAccess.access_level})`
         );
       }
 
@@ -206,21 +217,9 @@ export default function ShareModal({
         throw new Error(`Sharing failed: ${accessError.message}`);
       }
 
-      console.log("[v0] Inserting audit log");
-
-      const { error: auditError } = await supabase.from("audit_log").insert({
-        user_id: user.id,
-        action: "share",
-        file_id: file.id,
-        target_user_id: recipientData.id,
-      });
-
-      if (auditError) {
-        console.error("[v0] Audit log error:", auditError);
-      }
-
-      setSuccess(`File shared with ${recipientEmail} as ${accessLevel}`);
-      setRecipientEmail("");
+      // The audit entry is written by a database trigger.
+      setSuccess(`File shared with ${recipientUsername} as ${accessLevel}`);
+      setRecipientUsername("");
       setAccessLevel("downloader");
       await loadAccessList();
 
@@ -277,13 +276,6 @@ export default function ShareModal({
 
       if (error) throw error;
 
-      await supabase.from("audit_log").insert({
-        user_id: user.id,
-        action: "revoke_access",
-        file_id: file.id,
-        target_user_id: userId,
-      });
-
       await loadAccessList();
     } catch (err: any) {
       setError(err.message || "Failed to remove access");
@@ -328,18 +320,20 @@ export default function ShareModal({
           onSubmit={handleShare}
           className="space-y-4 mb-6 pb-6 border-b border-border"
         >
-          {/* Recipient Email */}
+          {/* Recipient username */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
-              <Mail className="w-4 h-4 inline mr-2" />
+              <UserIcon className="w-4 h-4 inline mr-2" />
               Add People
             </label>
             <div className="flex gap-2">
               <input
-                type="email"
-                value={recipientEmail}
-                onChange={(e) => setRecipientEmail(e.target.value)}
-                placeholder="email@example.com"
+                type="text"
+                value={recipientUsername}
+                onChange={(e) => setRecipientUsername(e.target.value)}
+                placeholder="username"
+                autoCapitalize="none"
+                spellCheck={false}
                 className="flex-1 px-3 py-2 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 required
               />
@@ -401,7 +395,7 @@ export default function ShareModal({
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">
-                      {person.email}
+                      {person.username}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {person.role}
@@ -433,8 +427,9 @@ export default function ShareModal({
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </>
-                    ) : person.role.toLowerCase() === "collaborator" &&
-                      user.id !== file.owner_id ? (
+                    ) : person.sharedBy === user.id ? (
+                      // Collaborators may revoke only the shares they made
+                      // (enforced by RLS as well).
                       <>
                         <span className="text-xs px-2 py-1 bg-muted/50 text-muted-foreground rounded cursor-default">
                           {person.role}

@@ -6,9 +6,12 @@ import { getSupabaseClient } from "@/lib/supabase";
 import UploadForm from "./upload-form";
 import FileList from "./file-list";
 import UserMenu from "./user-menu";
+import RecoverySetup from "./recovery-setup";
+import { displayName } from "@/lib/username";
 import { Upload, FileText, Share2 } from "lucide-react";
 
 export default function Dashboard({ user }: { user: any }) {
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [ownedFiles, setOwnedFiles] = useState<any[]>([]);
   const [sharedFiles, setSharedFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,12 +90,21 @@ export default function Dashboard({ user }: { user: any }) {
             <FileText className="w-6 h-6 text-primary" />
             <h1 className="text-2xl font-bold text-foreground">SecureShare</h1>
           </div>
-          <UserMenu user={user} />
+          <UserMenu
+            user={user}
+            onNewRecoveryCode={() => setRecoveryOpen(true)}
+          />
         </div>
       </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <RecoverySetup
+          userId={user.id}
+          username={displayName(user)}
+          open={recoveryOpen}
+          onOpenChange={setRecoveryOpen}
+        />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Upload Section */}
           <div className="lg:col-span-1">

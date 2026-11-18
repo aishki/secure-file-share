@@ -81,6 +81,13 @@ export default function FileCard({
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+
+      // Storage reads fire no table trigger, so report the download; the RPC
+      // checks the caller can access the file before logging.
+      const { error: logError } = await supabase.rpc("log_file_download", {
+        p_file_id: file.id,
+      });
+      if (logError) console.error("[v0] Download log error:", logError);
     } catch (err: any) {
       console.error("[v0] Download error:", err);
       alert("Download failed: " + err.message);

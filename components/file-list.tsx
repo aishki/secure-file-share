@@ -62,16 +62,7 @@ export default function FileList({
         .eq("id", fileId);
 
       if (deleteError) throw deleteError;
-
-      const { error: auditError } = await supabase.from("audit_log").insert({
-        user_id: user.id,
-        action: "delete",
-        file_id: fileId,
-      });
-
-      if (auditError) {
-        console.error("[v0] Audit log error:", auditError);
-      }
+      // The audit entry is written by a database trigger.
 
       onRefresh();
     } catch (err: any) {

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { getSupabaseClient } from "./supabase";
+import { unwrapPrivateKey, wrapPrivateKey } from "./crypto";
 
 interface User {
   id: string;
@@ -42,23 +43,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             id: authUser.id,
             email: authUser.email || "",
           });
-          // The password is only used to decrypt the private key, never sent to the server
+          // The password unlocks the private key locally. Note it is ALSO sent
+          // to Supabase Auth at login, so the backend is trusted with it.
           const password = sessionStorage.getItem(`pw_${authUser.id}`);
           if (password) {
-            // Try to decrypt the private key
-            const { data: userData } = await supabase
-              .from("users")
-              .select("private_key_encrypted")
-              .eq("id", authUser.id)
-              .single();
+            // The column is not selectable directly; this RPC returns only
+            // the caller's own wrapped key.
+            const { data: wrappedKey } = await supabase.rpc(
+              "get_my_private_key"
+            );
 
-            if (userData?.private_key_encrypted) {
+            if (typeof wrappedKey === "string" && wrappedKey) {
               try {
-                const decrypted = await decryptPrivateKeyFromEncrypted(
-                  userData.private_key_encrypted,
-                  password
-                );
-                setPrivateKeyDecrypted(decrypted);
+                const { privateKey, privateKeyPEM, needsRewrap } =
+                  await unwrapPrivateKey(wrappedKey, password);
+                setPrivateKeyDecrypted(privateKey);
+
+                // Migrate legacy (unsalted SHA-256) blobs to PBKDF2 in place.
+                if (needsRewrap) {
+                  const rewrapped = await wrapPrivateKey(
+                    privateKeyPEM,
+                    password
+                  );
+                  const { error: rewrapError } = await supabase
+                    .from("users")
+                    .update({ private_key_encrypted: rewrapped })
+                    .eq("id", authUser.id);
+                  if (rewrapError) {
+                    console.error(
+                      "[v0] Failed to upgrade private key encryption:",
+                      rewrapError
+                    );
+                  }
+                }
               } catch (err) {
                 console.error("[v0] Failed to decrypt private key:", err);
               }
@@ -101,35 +118,4 @@ export function useAuth() {
     throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
-}
-
-// Helper function to decrypt private key from encrypted storage
-async function decryptPrivateKeyFromEncrypted(
-  encryptedPrivateKeyString: string,
-  password: string
-): Promise<CryptoKey> {
-  const { importRSAPrivateKeyFromPEM } = await import("./crypto");
-
-  // Parse the encrypted data
-  const { iv, data } = JSON.parse(atob(encryptedPrivateKeyString));
-
-  // Derive key from password
-  const encoder = new TextEncoder();
-  const keyMaterial = encoder.encode(password);
-  const keyHash = await crypto.subtle.digest("SHA-256", keyMaterial);
-  const key = await crypto.subtle.importKey("raw", keyHash, "AES-GCM", false, [
-    "encrypt",
-    "decrypt",
-  ]);
-
-  // Decrypt
-  const decryptedData = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: new Uint8Array(iv) },
-    key,
-    new Uint8Array(data)
-  );
-
-  // Convert back to PEM and import as RSA key
-  const privateKeyPEM = new TextDecoder().decode(decryptedData);
-  return await importRSAPrivateKeyFromPEM(privateKeyPEM);
 }
